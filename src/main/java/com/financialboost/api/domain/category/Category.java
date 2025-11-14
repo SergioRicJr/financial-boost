@@ -1,7 +1,5 @@
 package com.financialboost.api.domain.category;
 
-import java.util.UUID;
-
 import com.financialboost.api.domain.user.User;
 
 import jakarta.persistence.Entity;
@@ -36,9 +34,9 @@ public class Category {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    public Category(CategoryRequestDTO data, User user) {
-        this.name = data.name();
-        this.icon = data.icon();
+    public Category(String name, String icon, User user) {
+        this.name = name;
+        this.icon = icon;
         this.user = user;
     }
 }

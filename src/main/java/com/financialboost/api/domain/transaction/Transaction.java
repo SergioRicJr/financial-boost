@@ -20,11 +20,11 @@ import lombok.Setter;
 @NoArgsConstructor
 public class Transaction {
 
-    public Transaction(TransactionRequestDTO data, Category category, User user){
-        this.value = data.value();
-        this.operation = data.operation();
-        this.type = data.type();
-        this.datetime = data.datetime();
+    public Transaction(BigDecimal value, Operation operation, TransactionType type, LocalDateTime datetime, Category category, User user){
+        this.value = value;
+        this.operation = operation;
+        this.type = type;
+        this.datetime = datetime;
         this.category = category;
         this.user = user;
     }
