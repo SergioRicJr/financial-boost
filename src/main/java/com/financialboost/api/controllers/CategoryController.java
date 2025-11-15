@@ -34,7 +34,7 @@ public class CategoryController {
         Category newCategory = new Category(body.name(), body.icon(), user);
 
         this.repository.save(newCategory);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(new CategoryResponseDTO(newCategory));
     }
 
     @GetMapping

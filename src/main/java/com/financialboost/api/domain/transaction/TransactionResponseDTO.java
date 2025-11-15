@@ -7,7 +7,8 @@ public record TransactionResponseDTO(
         Transaction.Operation operation,
         Transaction.TransactionType type,
         String datetime,
-        String value
+        String value,
+        String imgUrl
 ) {
     public TransactionResponseDTO(Transaction transaction) {
         this(
@@ -17,7 +18,8 @@ public record TransactionResponseDTO(
             transaction.getOperation(),
             transaction.getType(),
             transaction.getDatetime().toString(),
-            transaction.getValue().toString()
+            transaction.getValue().toString(),
+            transaction.getImgUrl()
         );
     }
 }

@@ -7,12 +7,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
 
 import com.financialboost.api.domain.category.Category;
 import com.financialboost.api.domain.transaction.Transaction;
@@ -22,6 +24,7 @@ import com.financialboost.api.domain.transaction.TransactionUpdateDTO;
 import com.financialboost.api.domain.user.User;
 import com.financialboost.api.repository.CategoryRepository;
 import com.financialboost.api.repository.TransactionRepository;
+import com.financialboost.api.services.FileService;
 
 @RestController
 @RequestMapping("transactions")
@@ -32,12 +35,15 @@ public class TransactionController {
     @Autowired
     CategoryRepository categoryRepository;
 
+    @Autowired
+    FileService fileService;
+
     private User getAuthenticatedUser() {
         return (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 
-    @PostMapping
-    public ResponseEntity<?> createTransaction(@RequestBody TransactionRequestDTO body) {
+    @PostMapping(consumes = "multipart/form-data")
+    public ResponseEntity<?> createTransaction(@ModelAttribute TransactionRequestDTO body) {
         User user = getAuthenticatedUser();
 
         Category category = categoryRepository.findById(body.categoryId())
@@ -48,13 +54,23 @@ public class TransactionController {
             return ResponseEntity.status(404).body("Categoria não encontrada");
         }
 
+        String imgUrl = null;
+        if (body.image() != null && !body.image().isEmpty()) {
+            try {
+                imgUrl = fileService.saveFile(body.image());
+            } catch (IOException e) {
+                return ResponseEntity.status(500).body("Erro ao salvar imagem: " + e.getMessage());
+            }
+        }
+
         Transaction transaction = new Transaction(
             body.value(),
             body.operation(),
             body.type(),
             body.datetime(),
             category,
-            user
+            user,
+            imgUrl
         );
 
         repository.save(transaction);
@@ -90,8 +106,8 @@ public class TransactionController {
         return ResponseEntity.ok(new TransactionResponseDTO(transaction));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateTransaction(@PathVariable Integer id, @RequestBody TransactionUpdateDTO body) {
+    @PutMapping(value = "/{id}", consumes = "multipart/form-data")
+    public ResponseEntity<?> updateTransaction(@PathVariable Integer id, @ModelAttribute TransactionUpdateDTO body) {
         User user = getAuthenticatedUser();
 
         Transaction transaction = repository.findById(id)
@@ -128,6 +144,15 @@ public class TransactionController {
             }
 
             transaction.setCategory(category);
+        }
+
+        if (body.image() != null && !body.image().isEmpty()) {
+            try {
+                String imgUrl = fileService.saveFile(body.image());
+                transaction.setImgUrl(imgUrl);
+            } catch (IOException e) {
+                return ResponseEntity.status(500).body("Erro ao salvar imagem: " + e.getMessage());
+            }
         }
 
         repository.save(transaction);

@@ -20,13 +20,14 @@ import lombok.Setter;
 @NoArgsConstructor
 public class Transaction {
 
-    public Transaction(BigDecimal value, Operation operation, TransactionType type, LocalDateTime datetime, Category category, User user){
+    public Transaction(BigDecimal value, Operation operation, TransactionType type, LocalDateTime datetime, Category category, User user, String imgUrl){
         this.value = value;
         this.operation = operation;
         this.type = type;
         this.datetime = datetime;
         this.category = category;
         this.user = user;
+        this.imgUrl = imgUrl;
     }
 
     @Id
@@ -54,6 +55,8 @@ public class Transaction {
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    private String imgUrl;
 
     public enum Operation {
         POSITIVE, // Representa entrada (+)

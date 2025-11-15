@@ -21,8 +21,6 @@ import com.financialboost.api.repository.UserRepository;
 @RequestMapping("auth")
 public class AuthenticationController {
 
-    private static final User User = null;
-
     @Autowired
     private AuthenticationManager authenticationManager;
 
@@ -33,7 +31,7 @@ public class AuthenticationController {
     private TokenService tokenService;
 
     @PostMapping("/login")
-    public ResponseEntity login(@RequestBody AuthenticationDTO body){
+    public ResponseEntity<LoginResponseDTO> login(@RequestBody AuthenticationDTO body){
         var usernamePassword = new UsernamePasswordAuthenticationToken(body.login(), body.password());
         var auth = this.authenticationManager.authenticate(usernamePassword);
 
@@ -43,7 +41,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity register(@RequestBody RegisterDTO body) {
+    public ResponseEntity<?> register(@RequestBody RegisterDTO body) {
         if(this.repository.findByLogin(body.login()) != null) return ResponseEntity.badRequest().build();
 
         String encryptedPassword = new BCryptPasswordEncoder().encode(body.password());
