@@ -1,8 +1,10 @@
 package com.financialboost.api.controllers;
 
-import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,12 +14,20 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import jakarta.persistence.criteria.Predicate;
 
 import com.financialboost.api.domain.category.Category;
 import com.financialboost.api.domain.transaction.Transaction;
+import com.financialboost.api.domain.transaction.Transaction.Operation;
+import com.financialboost.api.domain.transaction.Transaction.TransactionType;
 import com.financialboost.api.domain.transaction.TransactionRequestDTO;
 import com.financialboost.api.domain.transaction.TransactionResponseDTO;
 import com.financialboost.api.domain.transaction.TransactionUpdateDTO;
@@ -78,16 +88,72 @@ public class TransactionController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TransactionResponseDTO>> getAllCategoies() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    public ResponseEntity<Page<TransactionResponseDTO>> getAllTransactions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Operation operation,
+            @RequestParam(required = false) BigDecimal valueMin,
+            @RequestParam(required = false) BigDecimal valueMax,
+            @RequestParam(required = false) LocalDateTime datetimeMin,
+            @RequestParam(required = false) LocalDateTime datetimeMax) {
+        User user = getAuthenticatedUser();
 
-        List<TransactionResponseDTO> transactionList = 
-            this.repository.findByUserId(user.getId())
-                        .stream()
-                        .map(TransactionResponseDTO::new)
-                        .toList();
+        Pageable pageable = PageRequest.of(page, size);
 
-        return ResponseEntity.ok(transactionList);
+        Specification<Transaction> spec = buildSpecification(
+                user.getId(), type, categoryId, operation,
+                valueMin, valueMax, datetimeMin, datetimeMax);
+
+        Page<Transaction> transactionPage = this.repository.findAll(spec, pageable);
+        Page<TransactionResponseDTO> transactionResponsePage = transactionPage.map(TransactionResponseDTO::new);
+
+        return ResponseEntity.ok(transactionResponsePage);
+    }
+
+    private Specification<Transaction> buildSpecification(
+            UUID userId,
+            TransactionType type,
+            Integer categoryId,
+            Operation operation,
+            BigDecimal valueMin,
+            BigDecimal valueMax,
+            LocalDateTime datetimeMin,
+            LocalDateTime datetimeMax) {
+        return (root, query, cb) -> {
+            Predicate predicate = cb.equal(root.get("user").get("id"), userId);
+
+            if (type != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("type"), type));
+            }
+
+            if (categoryId != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("category").get("id"), categoryId));
+            }
+
+            if (operation != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("operation"), operation));
+            }
+
+            if (valueMin != null) {
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("value"), valueMin));
+            }
+
+            if (valueMax != null) {
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get("value"), valueMax));
+            }
+
+            if (datetimeMin != null) {
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("datetime"), datetimeMin));
+            }
+
+            if (datetimeMax != null) {
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get("datetime"), datetimeMax));
+            }
+
+            return predicate;
+        };
     }
 
 

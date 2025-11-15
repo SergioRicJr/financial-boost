@@ -1,11 +1,14 @@
 package com.financialboost.api.repository;
 
-import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import com.financialboost.api.domain.transaction.Transaction;;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface TransactionRepository extends JpaRepository<Transaction, Integer> {
-    List<Transaction> findByUserId(UUID userId);
+import com.financialboost.api.domain.transaction.Transaction;
+
+public interface TransactionRepository extends JpaRepository<Transaction, Integer>, JpaSpecificationExecutor<Transaction> {
+    Page<Transaction> findByUserId(UUID userId, Pageable pageable);
 }
