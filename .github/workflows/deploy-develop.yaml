@@ -1,0 +1,90 @@
+name: "Deploy DEV EC2"
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  REMOTE_APP_PATH: /home/ec2-user/financial-boost.jar
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::238309559213:role/github-actions-sergioRicJr-pipeline
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Maven build
+        run: mvn -B clean install
+
+      - name: Capture artifact path
+        id: artifact
+        run: echo "jar_path=$(ls target/*.jar | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH key
+        run: |
+          cat <<'EOF' > financialboostec2.pem
+          ${{ secrets.C2_KEY_PEM }}
+          EOF
+          chmod 600 financialboostec2.pem
+
+      - name: Prepare application env file
+        run: |
+          cat <<EOF > app.env
+          DB_URL='${{ secrets.DB_URL }}'
+          DB_USER='${{ secrets.DB_USER }}'
+          DB_PASSWORD='${{ secrets.DB_PASSWORD }}'
+          AWS_BUCKET_NAME='${{ secrets.S3_BUCKET }}'
+          AWS_REGION='${{ env.AWS_REGION }}'
+          JWT_SECRET='${{ secrets.JWT_SECRET }}'
+          EOF
+
+      - name: Upload artifact to EC2
+        env:
+          JAR_PATH: ${{ steps.artifact.outputs.jar_path }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          scp -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "$JAR_PATH" "${EC2_USER}@${EC2_HOST}:${REMOTE_APP_PATH}"
+          scp -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            app.env "${EC2_USER}@${EC2_HOST}:~/app.env"
+
+      - name: Configure and restart application
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "${EC2_USER}@${EC2_HOST}" <<EOF
+          set -e
+          APP_ENV=~/app.env
+          chmod 600 "\$APP_ENV"
+          pkill -f "${REMOTE_APP_PATH}" || true
+          nohup bash -c "set -a; source \$APP_ENV; exec java -jar \"${REMOTE_APP_PATH}\"" >/dev/null 2>&1 &
+          EOF
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f financialboostec2.pem app.env
+
