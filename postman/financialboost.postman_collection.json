@@ -1,0 +1,1207 @@
+{
+  "info": {
+    "_postman_id": "4f6d1a4e-4bd2-4c9f-a71a-5de2f1bc9a62",
+    "name": "FinancialBoost API",
+    "description": "Collection para testar todos os endpoints expostos pela FinancialBoost API.\nInclui cenários de sucesso e de falha (401/404/400) com variáveis reutilizáveis.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Fluxos públicos para criação e autenticação de usuários.",
+      "item": [
+        {
+          "name": "Register User - sucesso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para registro\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"login\": \"{{userLogin}}\",\n    \"password\": \"{{userPassword}}\",\n    \"role\": \"{{userRole}}\",\n    \"picture\": \"{{userPicture}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Cria um usuário válido que será utilizado pelos demais testes autenticados."
+          }
+        },
+        {
+          "name": "Register User - login duplicado (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 para login duplicado\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"login\": \"{{userLogin}}\",\n    \"password\": \"{{userPassword}}\",\n    \"role\": \"{{userRole}}\",\n    \"picture\": \"{{userPicture}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Reenvie o cadastro logo após o sucesso para validar a resposta 400 quando o login já existir."
+          }
+        },
+        {
+          "name": "Login - sucesso (gera token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para login\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Token presente na resposta\", function () {",
+                  "    pm.expect(json.token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set(\"authToken\", json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"login\": \"{{userLogin}}\",\n    \"password\": \"{{userPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Autentica e persiste o JWT em {{authToken}} para uso nos demais requests protegidos."
+          }
+        },
+        {
+          "name": "Login - credenciais inválidas (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401 para credenciais inválidas\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"login\": \"{{userLogin}}\",\n    \"password\": \"senha_incorreta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Valida a proteção da API quando a senha enviada não confere."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "description": "CRUD completo de categorias do usuário autenticado.",
+      "item": [
+        {
+          "name": "Create Category - referência",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para criação de categoria\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"categoryId\", json.id);",
+                  "pm.collectionVariables.set(\"transactionCategoryId\", json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"{{categoryName}}\",\n    \"icon\": \"{{categoryIcon}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Gera uma categoria base utilizada nos testes de consulta, atualização e vínculo com transações."
+          }
+        },
+        {
+          "name": "Create Category - cenário para deleção",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para categoria destinada à deleção\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"categoryIdForDelete\", json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Categoria descartável\",\n    \"icon\": \"trash\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Cria uma categoria independente para o teste de deleção sem impactar os demais cenários."
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Retorna todas as categorias pertencentes ao usuário do token."
+          }
+        },
+        {
+          "name": "Get Category by Id - sucesso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Busca a categoria criada anteriormente."
+          }
+        },
+        {
+          "name": "Get Category by Id - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a categoria não existe\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{nonExistingCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{nonExistingCategoryId}}"
+              ]
+            },
+            "description": "Utiliza um ID inexistente para verificar o tratamento 404."
+          }
+        },
+        {
+          "name": "Update Category - sucesso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"{{categoryNameUpdated}}\",\n    \"icon\": \"{{categoryIconUpdated}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Atualiza campos opcionais da categoria encontrada."
+          }
+        },
+        {
+          "name": "Update Category - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a categoria não existe\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Categoria inexistente\",\n    \"icon\": \"ghost\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{nonExistingCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{nonExistingCategoryId}}"
+              ]
+            },
+            "description": "Valida resposta 404 ao tentar atualizar um recurso que não pertence ao usuário."
+          }
+        },
+        {
+          "name": "Delete Category - sucesso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 para deleção\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryIdForDelete}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryIdForDelete}}"
+              ]
+            },
+            "description": "Remove a categoria criada especificamente para este cenário."
+          }
+        },
+        {
+          "name": "Delete Category - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 ao deletar categoria inexistente\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{nonExistingCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{nonExistingCategoryId}}"
+              ]
+            },
+            "description": "Força a resposta 404 ao remover um ID inexistente."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "description": "CRUD completo com filtros e validações de categoria vinculada.",
+      "item": [
+        {
+          "name": "Create Transaction - sucesso (multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para criação de transação\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"transactionId\", json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "value",
+                  "value": "{{transactionValue}}",
+                  "type": "text"
+                },
+                {
+                  "key": "operation",
+                  "value": "{{transactionOperation}}",
+                  "type": "text"
+                },
+                {
+                  "key": "type",
+                  "value": "{{transactionType}}",
+                  "type": "text"
+                },
+                {
+                  "key": "datetime",
+                  "value": "{{transactionDatetime}}",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{transactionCategoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [
+                    "/absolute/path/to/optional-proof.png"
+                  ],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "Cria uma transação válidando o vínculo com categoria e enviando (opcionalmente) um comprovante."
+          }
+        },
+        {
+          "name": "Create Transaction - categoria inválida (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a categoria não pertence ao usuário\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "value",
+                  "value": "900.00",
+                  "type": "text"
+                },
+                {
+                  "key": "operation",
+                  "value": "NEGATIVE",
+                  "type": "text"
+                },
+                {
+                  "key": "type",
+                  "value": "TED",
+                  "type": "text"
+                },
+                {
+                  "key": "datetime",
+                  "value": "2023-11-22T12:45:00",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{nonExistingCategoryId}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "Simula envio com categoria inexistente, retornando mensagem 404 configurada no controller."
+          }
+        },
+        {
+          "name": "Create Transaction - cenário para deleção",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 para transação descartável\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"transactionIdForDelete\", json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "value",
+                  "value": "55.90",
+                  "type": "text"
+                },
+                {
+                  "key": "operation",
+                  "value": "NEGATIVE",
+                  "type": "text"
+                },
+                {
+                  "key": "type",
+                  "value": "BOLETO",
+                  "type": "text"
+                },
+                {
+                  "key": "datetime",
+                  "value": "2023-11-21T18:00:00",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{transactionCategoryId}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            },
+            "description": "Cria uma transação independente para o cenário de deleção."
+          }
+        },
+        {
+          "name": "List Transactions - paginação padrão",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?page={{defaultPage}}&size={{defaultSize}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{defaultPage}}"
+                },
+                {
+                  "key": "size",
+                  "value": "{{defaultSize}}"
+                }
+              ]
+            },
+            "description": "Retorna uma página de transações do usuário autenticado."
+          }
+        },
+        {
+          "name": "List Transactions - com filtros",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?page={{defaultPage}}&size={{defaultSize}}&type={{transactionType}}&categoryId={{transactionCategoryId}}&operation={{transactionOperation}}&valueMin={{transactionValueMin}}&valueMax={{transactionValueMax}}&datetimeMin={{transactionDatetimeMin}}&datetimeMax={{transactionDatetimeMax}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{defaultPage}}"
+                },
+                {
+                  "key": "size",
+                  "value": "{{defaultSize}}"
+                },
+                {
+                  "key": "type",
+                  "value": "{{transactionType}}"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{transactionCategoryId}}"
+                },
+                {
+                  "key": "operation",
+                  "value": "{{transactionOperation}}"
+                },
+                {
+                  "key": "valueMin",
+                  "value": "{{transactionValueMin}}"
+                },
+                {
+                  "key": "valueMax",
+                  "value": "{{transactionValueMax}}"
+                },
+                {
+                  "key": "datetimeMin",
+                  "value": "{{transactionDatetimeMin}}"
+                },
+                {
+                  "key": "datetimeMax",
+                  "value": "{{transactionDatetimeMax}}"
+                }
+              ]
+            },
+            "description": "Demonstra o uso combinado dos filtros disponíveis no endpoint GET /transactions."
+          }
+        },
+        {
+          "name": "Get Transaction by Id - sucesso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            },
+            "description": "Busca o registro criado no cenário principal."
+          }
+        },
+        {
+          "name": "Get Transaction by Id - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a transação não existe\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{nonExistingTransactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{nonExistingTransactionId}}"
+              ]
+            },
+            "description": "Garante a resposta 404 configurada quando o ID não pertence ao usuário."
+          }
+        },
+        {
+          "name": "Update Transaction - sucesso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "value",
+                  "value": "777.77",
+                  "type": "text"
+                },
+                {
+                  "key": "operation",
+                  "value": "NEGATIVE",
+                  "type": "text"
+                },
+                {
+                  "key": "type",
+                  "value": "DOC",
+                  "type": "text"
+                },
+                {
+                  "key": "datetime",
+                  "value": "2023-11-23T09:15:00",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{transactionCategoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [
+                    "/absolute/path/to/new-proof.png"
+                  ],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            },
+            "description": "Atualiza vários campos e substitui a imagem caso habilitado."
+          }
+        },
+        {
+          "name": "Update Transaction - categoria inválida (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a categoria enviada não existe\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "categoryId",
+                  "value": "{{nonExistingCategoryId}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            },
+            "description": "Tenta amarrar a transação a uma categoria inexistente para forçar o 404."
+          }
+        },
+        {
+          "name": "Update Transaction - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 quando a transação não existe\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "value",
+                  "value": "10.00",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{nonExistingTransactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{nonExistingTransactionId}}"
+              ]
+            },
+            "description": "Valida 404 quando o ID enviado não pertence ao usuário."
+          }
+        },
+        {
+          "name": "Delete Transaction - sucesso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 para deleção de transação\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionIdForDelete}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionIdForDelete}}"
+              ]
+            },
+            "description": "Remove a transação criada para este cenário."
+          }
+        },
+        {
+          "name": "Delete Transaction - não encontrada (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 ao deletar transação inexistente\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{nonExistingTransactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{nonExistingTransactionId}}"
+              ]
+            },
+            "description": "Força a mensagem 404 prevista quando o ID é inválido."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "userLogin",
+      "value": "usuario.teste@financialboost.com"
+    },
+    {
+      "key": "userPassword",
+      "value": "Senha@123"
+    },
+    {
+      "key": "userRole",
+      "value": "USER"
+    },
+    {
+      "key": "userPicture",
+      "value": "https://cdn.example.com/avatar.png"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "categoryName",
+      "value": "Moradia"
+    },
+    {
+      "key": "categoryIcon",
+      "value": "home"
+    },
+    {
+      "key": "categoryNameUpdated",
+      "value": "Custos Fixos"
+    },
+    {
+      "key": "categoryIconUpdated",
+      "value": "payments"
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "categoryIdForDelete",
+      "value": ""
+    },
+    {
+      "key": "nonExistingCategoryId",
+      "value": "999999"
+    },
+    {
+      "key": "transactionValue",
+      "value": "1250.75"
+    },
+    {
+      "key": "transactionOperation",
+      "value": "POSITIVE"
+    },
+    {
+      "key": "transactionType",
+      "value": "PIX"
+    },
+    {
+      "key": "transactionDatetime",
+      "value": "2023-11-22T10:30:00"
+    },
+    {
+      "key": "transactionCategoryId",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
+      "value": ""
+    },
+    {
+      "key": "transactionIdForDelete",
+      "value": ""
+    },
+    {
+      "key": "nonExistingTransactionId",
+      "value": "999999"
+    },
+    {
+      "key": "defaultPage",
+      "value": "0"
+    },
+    {
+      "key": "defaultSize",
+      "value": "10"
+    },
+    {
+      "key": "transactionValueMin",
+      "value": "100"
+    },
+    {
+      "key": "transactionValueMax",
+      "value": "5000"
+    },
+    {
+      "key": "transactionDatetimeMin",
+      "value": "2023-11-01T00:00:00"
+    },
+    {
+      "key": "transactionDatetimeMax",
+      "value": "2023-12-31T23:59:59"
+    }
+  ]
+}
+
