@@ -1,0 +1,16 @@
+name: "DEV DEPLOY"
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  terraform:
+    uses: ./.github/workflows/terraform.yaml
+    with:
+      environment: dev
+      aws-assume-role-arn: arn:aws:iam::238309559213:role/github-actions-sergioRicJr-pipeline
+      aws-statefile-s3-bucket: sergioricjr-us-east-1-terraform-state-file
+      aws-lock-dynamodb-table: sergioricjr-us-east-1-terraform-lock
+      aws-region: us-east-1
