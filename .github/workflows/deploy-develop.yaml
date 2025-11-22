@@ -48,6 +48,17 @@ jobs:
           EOF
           chmod 600 financialboostec2.pem
 
+      - name: Prepare application env file
+        run: |
+          cat <<EOF > app.env
+          DB_URL='${{ secrets.DB_URL }}'
+          DB_USER='${{ secrets.DB_USER }}'
+          DB_PASSWORD='${{ secrets.DB_PASSWORD }}'
+          AWS_BUCKET_NAME='${{ secrets.S3_BUCKET }}'
+          AWS_REGION='${{ env.AWS_REGION }}'
+          JWT_SECRET='${{ secrets.JWT_SECRET }}'
+          EOF
+
       - name: Upload artifact to EC2
         env:
           JAR_PATH: ${{ steps.artifact.outputs.jar_path }}
@@ -56,33 +67,24 @@ jobs:
         run: |
           scp -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "$JAR_PATH" "${EC2_USER}@${EC2_HOST}:${REMOTE_APP_PATH}"
+          scp -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            app.env "${EC2_USER}@${EC2_HOST}:~/app.env"
 
       - name: Configure and restart application
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
-          DB_URL: ${{ secrets.DB_URL }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          S3_BUCKET: ${{ secrets.S3_BUCKET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           ssh -i financialboostec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "${EC2_USER}@${EC2_HOST}" <<EOF
+          set -e
+          APP_ENV=~/app.env
+          chmod 600 "\$APP_ENV"
           pkill -f "${REMOTE_APP_PATH}" || true
-          cat <<'ENVVARS' > ~/app.env
-          DB_HOST=${DB_HOST}
-          DB_PORT=${DB_PORT}
-          DB_NAME=${DB_NAME}
-          DB_USER=${DB_USER}
-          DB_PASSWORD=${DB_PASSWORD}
-          S3_BUCKET=${S3_BUCKET}
-          JWT_SECRET=${JWT_SECRET}
-          ENVVARS
-          nohup env \$(tr '\n' ' ' < ~/app.env) java -jar "${REMOTE_APP_PATH}" > app.log 2>&1 &
+          nohup bash -c "set -a; source \$APP_ENV; exec java -jar \"${REMOTE_APP_PATH}\"" >/dev/null 2>&1 &
           EOF
 
       - name: Cleanup key
         if: always()
-        run: rm -f financialboostec2.pem
+        run: rm -f financialboostec2.pem app.env
 
