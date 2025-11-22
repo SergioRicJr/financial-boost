@@ -34,6 +34,8 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_ec2_private_key_pem: ${{ secrets.C2_KEY_PEM }}
 
     defaults:
       run:
@@ -47,13 +49,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.3
-
-      - name: Restore EC2 SSH key
-        run: |
-          cat <<'EOF' > infra/financialboostec2.pem
-          ${{ secrets.C2_KEY_PEM }}
-          EOF
-          chmod 600 infra/financialboostec2.pem
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -84,7 +79,3 @@ jobs:
         run: cd infra &&
           terraform workspace select ${{ inputs.environment }} || terraform workspace new ${{ inputs.environment }} &&
           terraform apply "${{ inputs.environment }}.plan"
-
-      - name: Clean up SSH key
-        if: always()
-        run: rm -f infra/financialboostec2.pem

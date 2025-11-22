@@ -27,3 +27,10 @@ variable "db_allocated_storage" {
   description = "Armazenamento alocado (GiB) para o RDS."
   default     = 20
 }
+
+variable "ec2_private_key_pem" {
+  type        = string
+  description = "Conteudo PEM da chave privada usada pelo EC2."
+  default     = ""
+  sensitive   = true
+}

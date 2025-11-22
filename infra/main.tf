@@ -32,6 +32,7 @@ locals {
 
   az_public  = "${var.aws_region}a"
   az_private = "${var.aws_region}b"
+  private_key_pem = var.ec2_private_key_pem != "" ? trimspace(var.ec2_private_key_pem) : file("${path.module}/financialboostec2.pem")
 }
 
 data "aws_ssm_parameter" "al2023_ami" {
@@ -39,7 +40,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 data "tls_public_key" "financial_boost" {
-  private_key_pem = file("${path.module}/financialboostec2.pem")
+  private_key_pem = local.private_key_pem
 }
 
 # ------------------------------
