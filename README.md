@@ -1,71 +1,59 @@
 # FinancialBoost API
 
-API financeira escrita em Spring Boot que centraliza autenticação de usuários, cadastro de categorias, controle de transações com upload de comprovantes para o S3 e provisionamento completo de infraestrutura em AWS via Terraform, com entrega contínua automatizada pelo GitHub Actions.
+API financeira em Spring Boot responsável por autenticação JWT, categorias e transações com upload para S3. A infraestrutura roda em AWS (VPC, EC2, RDS, S3, IAM) com provisionamento automática via Terraform e deploy contínuo pelo GitHub Actions.
 
 ---
 
 ## Sumário
 
 1. [Visão Geral](#visão-geral)
-2. [Arquitetura & Stack](#arquitetura--stack)
-3. [Domínios e Endpoints](#domínios-e-endpoints)
+2. [Stack & Arquitetura](#stack--arquitetura)
+3. [Domínios e Contratos](#domínios-e-contratos)
 4. [Estrutura do Repositório](#estrutura-do-repositório)
-5. [Variáveis de Ambiente e Segredos](#variáveis-de-ambiente-e-segredos)
-6. [Pré-requisitos e Configuração de CLI](#pré-requisitos-e-configuração-de-cli)
-7. [Execução Local com Docker](#execução-local-com-docker)
-8. [Execução Local com Maven](#execução-local-com-maven)
-9. [Coleção Postman](#coleção-postman)
-10. [Infraestrutura como Código (Terraform)](#infraestrutura-como-código-terraform)
-11. [Passo a passo de configuração AWS (Manual)](#passo-a-passo-de-configuração-aws-manual)
-12. [Pipelines do GitHub Actions](#pipelines-do-github-actions)
-13. [Fluxo de Deploy na Nuvem](#fluxo-de-deploy-na-nuvem)
-14. [Testes e Observabilidade](#testes-e-observabilidade)
-15. [Troubleshooting & Próximos Passos](#troubleshooting--próximos-passos)
+5. [Configuração & Variáveis](#configuração--variáveis)
+6. [Execução Local](#execução-local)
+7. [Testes & Coleção Postman](#testes--coleção-postman)
+8. [Infra & Deploy](#infra--deploy)
+9. [Observabilidade & Próximos Passos](#observabilidade--próximos-passos)
+10. [Referências Rápidas](#referências-rápidas)
 
 ---
 
 ## Visão Geral
 
-- **Descrição**: Serviço RESTful que expõe autenticação JWT (`/auth`), CRUD de categorias (`/categories`) e transações financeiras (`/transactions`) com filtros paginados e upload opcional de comprovantes para S3.
-- **Banco**: PostgreSQL 15.x com migrações Flyway (`src/main/resources/db/migration`).
-- **Storage**: Arquivos são enviados para o bucket S3 `financial-boost-imagens` através do `FileService`.
-- **Segurança**: Spring Security + JWT (`TokenService`) com filtro customizado (`SecurityFilter`) autenticando todas as rotas exceto registro e login.
-- **Infra**: Terraform provisiona rede (VPC/subnets/IGW/route table), EC2 (Amazon Linux 2023 + Corretto 21), RDS PostgreSQL privado, IAM (perfil EC2 com S3 full access), bucket S3 público e state remoto em S3/DynamoDB.
-- **CI/CD**: GitHub Actions trata do provisionamento (workflow reutilizável `terraform.yaml`) e do deploy do jar para EC2 (`deploy-develop.yaml`).
+- API REST com autenticação JWT, CRUD de categorias e transações com filtros e paginação.
+- PostgreSQL 15 + Flyway para migrações.
+- Upload de comprovantes para S3 público com política de leitura.
+- Pipelines GitHub Actions: provisionamento Terraform + deploy contínuo para EC2.
+- Infra segura: VPC isolada, RDS privado, EC2 público com role de acesso ao S3.
 
 ---
 
-## Arquitetura & Stack
+## Stack & Arquitetura
 
-| Camada | Tecnologias/Detalhes |
+| Camada | Tecnologias |
 | --- | --- |
-| **Aplicação** | Spring Boot 3.5, Spring Web, Spring Data JPA, Spring Security, Auth0 JWT, Flyway, AWS SDK S3, Lombok |
-| **Banco** | PostgreSQL (Docker local ou Amazon RDS), H2 em testes |
-| **Infra** | AWS (VPC / Subnets / IGW / SG / EC2 t3.micro, RDS db.t4g.micro, S3, IAM, SSM Parameter Store para AMI) |
-| **IaC** | Terraform >= 1.8.3 com backend S3 (`sergioricjr-us-east-1-terraform-state-file`) e lock DynamoDB (`sergioricjr-us-east-1-terraform-lock`). Workspaces por ambiente (`infra/envs/<env>/terraform.tfvars`). |
-| **Entrega** | GitHub Actions + OIDC → IAM Role `github-actions-sergioRicJr-pipeline` |
-| **Containerização** | Dockerfile multi-stage (build com Maven 3.9.6 / Temurin 17, runtime Temurin 17 JRE). Docker Compose orquestra API + PostgreSQL. |
-| **Observabilidade** | Log padrão do Spring Boot (ajustável via `LOG_LEVEL`). `RequestLoggingConfig` disponível (comentado) para ligar trace detalhado. |
+| Aplicação | Spring Boot 3.5, Spring Web, Spring Data JPA, Spring Security, JWT (Auth0), Flyway, AWS SDK S3, Lombok |
+| Banco | PostgreSQL (local/RDS), H2 para testes |
+| Infra | AWS (VPC, Subnets, IGW, SG, EC2 t3.micro, RDS db.t4g.micro, S3, IAM) |
+| IaC | Terraform ≥ 1.8.3 com backend remoto (S3 + DynamoDB) e workspaces |
+| Entrega | GitHub Actions + OIDC assumindo a role `github-actions-sergioRicJr-pipeline` |
+| Container | Dockerfile multi-stage + Docker Compose |
 
 ---
 
-## Domínios e Endpoints
+## Domínios e Contratos
 
-| Domínio | Principais Rotas | Observações |
+| Domínio | Rotas principais | Observações |
 | --- | --- | --- |
-| **Autenticação** (`AuthenticationController`) | `POST /auth/register`, `POST /auth/login` | Registro usa BCrypt e impede logins duplicados. Login devolve JWT válido por 2h. |
-| **Categorias** (`CategoryController`) | `POST /categories`, `GET /categories`, `GET/PUT/DELETE /categories/{id}` | Escopo multi-tenant: sempre filtra pelo usuário autenticado via `SecurityContextHolder`. Resposta 404 quando o recurso não pertence ao usuário. |
-| **Transações** (`TransactionController`) | `POST /transactions` (multipart), `GET /transactions` (paginação + filtros), `GET/PUT/DELETE /transactions/{id}` | Upload opcional (`MultipartFile image`) enviado ao S3. Filtros: `type`, `categoryId`, `operation`, `valueMin/valueMax`, `datetimeMin/datetimeMax`. |
-| **Balances** | Entidade e migração já prontas, aguardando controller/service futuros. |
+| Auth | `POST /auth/register` / `POST /auth/login` | BCrypt + JWT (2h). |
+| Categorias | CRUD completo | Sempre filtrado pelo usuário autenticado. |
+| Transações | CRUD + filtros + upload | Recebe `MultipartFile image`; envia ao S3. Filtros por tipo, operação, valor e data. |
+| Balances | Entidade pronta | Controller/Service planejados. |
 
-### Contratos importantes
-
-- `TransactionRequestDTO`/`TransactionUpdateDTO` aceitam `operation` (`POSITIVE`/`NEGATIVE`) e `type` (`PIX`, `TED`, `DOC`, `TEF`, `BOLETO`).
-- `TransactionResponseDTO` devolve `imgUrl` hospedada no S3.
-- `CategoryResponseDTO` traz `userId` para rastreabilidade.
-- `User` implementa `UserDetails` com roles `USER` ou `ADMIN`.
-
-Consulte `postman/financialboost.postman_collection.json` para exemplos de payloads (inclui cenários 200/400/401/404).
+- DTOs aceitam `operation` (`POSITIVE`, `NEGATIVE`) e `type` (`PIX`, `TED`, `DOC`, `TEF`, `BOLETO`).
+- `TransactionResponseDTO` retorna `imgUrl` do S3; `CategoryResponseDTO` inclui `userId`.
+- Exemplos completos na collection `postman/financialboost.postman_collection.json`.
 
 ---
 
@@ -101,9 +89,10 @@ Consulte `postman/financialboost.postman_collection.json` para exemplos de paylo
 
 ---
 
-## Variáveis de Ambiente e Segredos
+## Configuração & Variáveis
 
-### Aplicação (utilizadas em `application.properties`)
+### Pré-requisitos
+- Git, JDK 17+ (21 recomendado), Maven 3.9+ (ou `./mvnw`), Docker 24+ / Compose v2, AWS CLI v2, Terraform ≥ 1.8.3, Postman/Newman.
 
 | Variável | Descrição | Default |
 | --- | --- | --- |
@@ -162,11 +151,11 @@ Credenciais AWS para as pipelines são obtidas via OIDC assumindo a role `arn:aw
 
 ---
 
-## Execução Local com Docker
+## Execução Local
 
 1. **Clonar e configurar variáveis**
    ```bash
-   git clone https://github.com/<org>/financialboost-api.git
+   git clone https://github.com/SergioRicJr/financial-boost
    cd financialboost-api
    ```
    Crie um arquivo `local.env` (usado pelo Compose):
@@ -200,7 +189,6 @@ Credenciais AWS para as pipelines são obtidas via OIDC assumindo a role `arn:aw
    ```
    (remove contêineres e volume efêmero do Postgres).
 
-> **Dica**: se não quiser interagir com S3 em desenvolvimento, desabilite o upload no Postman ou forneça uma credencial IAM com permissões limitadas em um bucket de testes.
 
 ---
 
@@ -236,7 +224,7 @@ Credenciais AWS para as pipelines são obtidas via OIDC assumindo a role `arn:aw
 
 ---
 
-## Coleção Postman
+## Testes & Coleção Postman
 
 - Caminho: `postman/financialboost.postman_collection.json`.
 - Passos:
@@ -255,7 +243,7 @@ Credenciais AWS para as pipelines são obtidas via OIDC assumindo a role `arn:aw
 
 ---
 
-## Infraestrutura como Código (Terraform)
+## Infra & Deploy (Terraform)
 
 ### Recursos Principais (`infra/main.tf`)
 
@@ -293,7 +281,7 @@ terraform plan -var-file=envs/dev/terraform.tfvars -out=dev.plan
 terraform apply dev.plan
 ```
 
-> ⚠️ A workflow `terraform.yaml` chama `terraform apply` logo após o plano; não há etapa de aprovação. Rode apenas quando tiver certeza das alterações.
+> ⚠️ O workflow `terraform.yaml` chama `terraform apply` logo após o plano; não há etapa de aprovação. Rode apenas quando tiver certeza das alterações.
 
 ### Ajustes comuns
 
@@ -385,11 +373,15 @@ sudo yum install -y java-21-amazon-corretto-headless
    source ~/app.env
    java -jar financial-boost.jar
    ```
-4. O processo estará ok quando o Spring Boot iniciar e o Flyway aplicar as migrations sem erros.
+4. **RDS**: PostgreSQL 15.7 `db.t4g.micro`, criação padrão, Secrets Manager para a senha, subnets privadas, sem acesso público, SG permitindo 5432 apenas do SG do EC2.
+5. **IAM**: role `ec2 S3 full access` (trust EC2 + `AmazonS3FullAccess`) e associação à instância.
+6. **Conexão**: resgatar endpoint do RDS (`jdbc:postgresql://<endpoint>/<db>`), usuário `postgres`, senha via Secrets Manager. Enviar `.jar` por `scp`, rodar `source ~/app.env && java -jar financial-boost.jar`. Flyway deve aplicar as migrações.
 
-### Visão resumida da arquitetura
+> Analogia rápida: a VPC é o “cofre”, o IGW é a porta controlada, o EC2 fica na sala pública (subnet pública) e o RDS permanece trancado na área privada; a role IAM é a chave que autoriza o EC2 a acessar o S3.
 
-A VPC funciona como um cofre: o **Internet Gateway** é a porta de entrada controlada, o **EC2** fica na sala de atendimento (subnet pública) acessível ao público, enquanto o **RDS** permanece trancado no compartimento interno (subnet privada) e só conversa com o EC2 via regras do Security Group. A **IAM Role** fornece a chave que permite ao servidor acessar outro cofre — o bucket S3 — para armazenar comprovantes.
+### Pipelines GitHub Actions
+- `terraform-develop.yaml`: disparo manual (`workflow_dispatch`) → chama `terraform.yaml`, assume a role OIDC e executa `terraform init/plan/apply` com `-var-file=envs/<environment>/terraform.tfvars`.
+- `deploy-develop.yaml`: trigger em `push` para `develop`; build Maven, gera `app.env`, copia jar e variáveis via `scp`, reinicia o processo no EC2 com `nohup`.
 
 ---
 
@@ -453,24 +445,17 @@ A VPC funciona como um cofre: o **Internet Gateway** é a porta de entrada contr
 
 ---
 
-## Testes e Observabilidade
+## Observabilidade & Próximos Passos
 
-- **Automatizados**: o repositório ainda não possui testes ativos (`ApiApplicationTests` está comentado). Recomenda-se adicionar testes de integração com Spring Test + Testcontainers.
-- **Manual**: use o Postman/Newman para validar cenários principais (inclui asserts).
-- **Logs**:
-  - Ajuste `LOG_LEVEL` para `INFO`/`WARN` em produção.
-  - Descomente `infra/logging/RequestLoggingConfig` para rastreamento detalhado (útil em dev).
-- **Monitoramento**:
-  - Habilite CloudWatch Logs ou Agents no EC2 para centralizar os logs do Spring (ainda não configurado).
-
----
-
-**Ideias futuras**
-- Expor métricas/health via Spring Actuator.
-- Adicionar controllers para `balances`.
-- Criar testes automatizados e pipeline de qualidade.
-- Configurar GitHub Environments com aprovação para `terraform apply`.
-- Automatizar criação do `app.env` via AWS Systems Manager Parameter Store em vez de secrets diretos.
+- Ajuste `LOG_LEVEL` (INFO/WARN em produção) e habilite `infra/logging/RequestLoggingConfig` quando precisar de tracing.
+- Sugerido habilitar CloudWatch Logs ou agentes no EC2 para centralizar logs.
+- Próximas melhorias:
+  - Expor Spring Actuator (health/metrics).
+  - Implementar controllers de `balances`.
+  - Adicionar testes automatizados (unitários e integração com Testcontainers).
+  - Configurar aprovações em `terraform apply`.
+  - Migrar `app.env` para AWS Systems Manager Parameter Store.
+  - Criar classe para salvar registro em filesystem em ambiente local e parametrizar isso na aplicação
 
 ---
 
@@ -480,7 +465,7 @@ A VPC funciona como um cofre: o **Internet Gateway** é a porta de entrada contr
 - Testes (quando existirem): `./mvnw test`
 - Docker: `docker compose --env-file local.env up --build`
 - Terraform (dev): `terraform plan -var-file=envs/dev/terraform.tfvars`
-- Deploy manual (fallback):
+- Deploy manual:
   ```bash
   scp -i financialboostec2.pem target/api-0.0.1-SNAPSHOT.jar ec2-user@<EC2_IP>:/home/ec2-user/financial-boost.jar
   ssh -i financialboostec2.pem ec2-user@<EC2_IP> "source ~/app.env && nohup java -jar financial-boost.jar &"
