@@ -16,10 +16,11 @@ API financeira escrita em Spring Boot que centraliza autenticação de usuários
 8. [Execução Local com Maven](#execução-local-com-maven)
 9. [Coleção Postman](#coleção-postman)
 10. [Infraestrutura como Código (Terraform)](#infraestrutura-como-código-terraform)
-11. [Pipelines do GitHub Actions](#pipelines-do-github-actions)
-12. [Fluxo de Deploy na Nuvem](#fluxo-de-deploy-na-nuvem)
-13. [Testes e Observabilidade](#testes-e-observabilidade)
-14. [Troubleshooting & Próximos Passos](#troubleshooting--próximos-passos)
+11. [Passo a passo de configuração AWS (Manual)](#passo-a-passo-de-configuração-aws-manual)
+12. [Pipelines do GitHub Actions](#pipelines-do-github-actions)
+13. [Fluxo de Deploy na Nuvem](#fluxo-de-deploy-na-nuvem)
+14. [Testes e Observabilidade](#testes-e-observabilidade)
+15. [Troubleshooting & Próximos Passos](#troubleshooting--próximos-passos)
 
 ---
 
@@ -299,6 +300,96 @@ terraform apply dev.plan
 - **Novo ambiente**: copiar `infra/envs/dev/terraform.tfvars` para `infra/envs/<env>/terraform.tfvars`, criar workspace e atualizar workflows (inputs).
 - **Key Pair**: atualize `var.key_pair_name` e mantenha o PEM seguro. Se `TF_VAR_ec2_private_key_pem` estiver vazio, o módulo tenta ler `infra/financialboostec2.pem`.
 - **Senha do banco**: como está gerenciada pela AWS Secrets Manager, use o output do RDS para configurar `DB_URL` e consulte o Secrets Manager para obter usuário/senha.
+
+---
+
+## Passo a passo de configuração AWS (Manual)
+
+Mesmo utilizando Terraform, às vezes é necessário subir a infraestrutura na mão (laboratórios, troubleshooting, ambientes pontuais). Abaixo está o roteiro completo usando apenas o Console AWS, seguindo exatamente os mesmos parâmetros já adotados pelo projeto.
+
+### 1. Configuração da VPC (Virtual Private Cloud) e redes
+
+| Serviço/Componente | Ação de Criação e Configuração | Observações e Detalhes | Fonte(s) |
+| --- | --- | --- | --- |
+| **VPC** | Criar nova VPC. | **Nome:** `financial boost vpc`. **Bloco CIDR IPv4:** `10.0.0.0/23` (512 IPs disponíveis). | Console AWS |
+| **Internet Gateway (IGW)** | Criar e associar à VPC. | **Nome:** `financial boost Gateway`. Vincular à `financial boost vpc`. | Console AWS |
+| **Subnet Pública** | Criar dentro da VPC. | **Nome:** `financial boost rede pública`. **CIDR:** `10.0.1.0/24`. **AZ:** `us-east-1a`. Hospeda o EC2. | Console AWS |
+| **Subnet Privada** | Criar dentro da VPC. | **Nome:** `financial boost rede privada`. **CIDR:** `10.0.0.0/24`. **AZ:** `us-east-1b`. Hospeda o RDS. | Console AWS |
+| **Tabela de Rotas** | Atualizar rota da subnet pública. | Adicionar rota `0.0.0.0/0` apontando para o IGW `financial boost Gateway`. | Console AWS |
+
+### 2. Configuração do S3 (Simple Storage Service)
+
+| Serviço/Componente | Ação de Criação e Configuração | Observações e Detalhes | Fonte(s) |
+| --- | --- | --- | --- |
+| **Bucket S3** | Criar novo bucket. | **Nome:** `financial boost imagens`. Desabilitar ACLs. Desbloquear acesso público para leitura. | Console AWS |
+| **Política do Bucket** | Ajustar Permissões → Política do Bucket. | Anexar política *Public read* permitindo `s3:GetObject`. Ajuste o ARN se usar outro nome. | Console AWS |
+
+Política sugerida:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Principal": "*",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::financial-boost-img/*"
+    }
+  ]
+}
+```
+
+### 3. Criação e configuração da instância EC2 (Servidor Java)
+
+| Serviço/Componente | Ação de Criação e Configuração | Observações e Detalhes | Fonte(s) |
+| --- | --- | --- | --- |
+| **Instância EC2** | Executar instância. | **Nome:** `Java Service financial boost`. **AMI:** Amazon Linux (2023). **Tipo:** `t3.micro`. Criar par de chaves `financialboostec2` (RSA, `.pem`). | Console AWS |
+| **Configurações de Rede** | Selecionar rede correta. | **VPC:** `financial boost vpc`. **Subnet:** `financial boost rede pública`. **IP público:** habilitar atribuição automática. | Console AWS |
+| **Security Group (EC2)** | Criar SG dedicado. | **Nome:** `financial boost ec2 Security group`. Liberar **SSH (22)**, **HTTP (80)**, **HTTPS (443)** e **TCP 8080** para `0.0.0.0/0`. | Console AWS |
+| **User Data** | Automatizar instalação do Java. | Inserir script abaixo ao criar a instância. | Console AWS |
+
+Script:
+
+```bash
+#!/bin/bash
+sudo yum update -y
+sudo yum install -y java-21-amazon-corretto-headless
+```
+
+### 4. Criação e configuração do RDS (PostgreSQL)
+
+| Serviço/Componente | Ação de Criação e Configuração | Observações e Detalhes | Fonte(s) |
+| --- | --- | --- | --- |
+| **Banco de Dados RDS** | Criar banco (modo padrão). | **Motor:** PostgreSQL **15.7-R4**. **Modelo:** Free tier. **Nome:** `financial boost Database`. **Usuário:** `postgres`. Ativar `AWS Secrets Manager` para gerenciar a senha. | Console AWS |
+| **Classe da instância** | Selecionar capacidade. | `db.t4g.micro`, armazenamento `gp3` 20 GiB. | Console AWS |
+| **Conectividade** | Ajustar acesso. | **VPC:** `financial boost vpc`. **Sub-redes:** use as privadas em múltiplas AZs. **Acesso público:** **Não**. Associar com a instância `Java Service financial boost`. | Console AWS |
+| **Security Group (RDS)** | Criar SG específico. | Permitir tráfego **somente** do SG do EC2 na porta 5432. | Console AWS |
+
+### 5. Configuração do IAM (Identity and Access Management)
+
+| Serviço/Componente | Ação de Criação e Configuração | Observações e Detalhes | Fonte(s) |
+| --- | --- | --- | --- |
+| **IAM Role** | Criar nova Role para EC2. | Entidade confiável: **EC2**. Anexar política `AmazonS3FullAccess`. **Nome:** `ec2 S3 full access`. | Console AWS |
+| **Associação ao EC2** | Vincular a Role. | Em `Java Service financial boost` → Ações → Segurança → Modificar função IAM → selecionar `ec2 S3 full access`. | Console AWS |
+
+### 6. Conexão final da aplicação com o RDS
+
+1. Obtenha o **endpoint** do RDS e monte o JDBC: `jdbc:postgresql://<ENDPOINT>/<DATABASE_NAME>`. O banco padrão é `postgres`.
+2. No `application.properties`, configure `spring.datasource.url`, `spring.datasource.username=postgres` e `spring.datasource.password` com a senha recuperada no Secrets Manager.
+3. Faça o upload do `.jar` (via `scp`) para o EC2, conecte-se por SSH e execute:
+   ```bash
+   source ~/app.env
+   java -jar financial-boost.jar
+   ```
+4. O processo estará ok quando o Spring Boot iniciar e o Flyway aplicar as migrations sem erros.
+
+### Visão resumida da arquitetura
+
+A VPC funciona como um cofre: o **Internet Gateway** é a porta de entrada controlada, o **EC2** fica na sala de atendimento (subnet pública) acessível ao público, enquanto o **RDS** permanece trancado no compartimento interno (subnet privada) e só conversa com o EC2 via regras do Security Group. A **IAM Role** fornece a chave que permite ao servidor acessar outro cofre — o bucket S3 — para armazenar comprovantes.
 
 ---
 
