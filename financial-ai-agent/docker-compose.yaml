@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # Financial AI Agent API
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financial-ai-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/financial_agent
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - LANGFUSE_HOST=http://langfuse:3000
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+    depends_on:
+      - db
+      - redis
+      - qdrant
+    networks:
+      - financial-ai-network
+
+  # ===========================================
+  # PostgreSQL Database
+  # ===========================================
+  db:
+    image: postgres:15-alpine
+    container_name: financial-ai-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: financial_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - financial-ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Redis Cache
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: financial-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - financial-ai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Qdrant Vector Store
+  # ===========================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: financial-ai-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - financial-ai-network
+
+  # ===========================================
+  # LangFuse (Observability) - Optional
+  # ===========================================
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: financial-ai-langfuse
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+      - NEXTAUTH_SECRET=mysecret
+      - SALT=mysalt
+      - NEXTAUTH_URL=http://localhost:3000
+      - TELEMETRY_ENABLED=true
+    depends_on:
+      - langfuse-db
+    networks:
+      - financial-ai-network
+
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: financial-ai-langfuse-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    networks:
+      - financial-ai-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  langfuse_postgres_data:
+
+networks:
+  financial-ai-network:
+    driver: bridge
